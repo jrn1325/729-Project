@@ -104,7 +104,108 @@ public class PrintingDependencyReceiver implements FunctionalDependencyResultRec
 
     public void infer()
     {
+        // expand the FDs
+        for(ArrayList<FunctionalDependency> fdList : _fds.values())
+        {
+            ArrayList<FunctionalDependency> addOn = new ArrayList<>();
+            for(FunctionalDependency fd: fdList)
+            {
+                Set FDcolumnIds = fd.getDeterminant().getColumnIdentifiers();
+                ColumnIdentifier depField = fd.getDependant();
+                FDcolumnIds.add(depField);
+                String tableName = fd.getDependant().getTableIdentifier();
+                for(InclusionDependency id: _ids)
+                {
+                    String refTable = id.getReferenced().getColumnIdentifiers().get(0).getTableIdentifier().replaceAll("^\"|\"$", "");
+                    if (tableName.equals(refTable)) {
+                        Set INDFields = new HashSet(id.getDependant().getColumnIdentifiers());
+                        Set refFields = new HashSet(id.getReferenced().getColumnIdentifiers());
+                        INDFields.addAll(refFields);
+                        if (INDFields.containsAll(FDcolumnIds)){
+                            String depTable = id.getDependant().getColumnIdentifiers().get(0).getTableIdentifier().replaceAll("^\"|\"$", "");
+                            if (!tableName.equals(depTable)){
+                                FunctionalDependency addFd = new FunctionalDependency();
+                                Set<ColumnIdentifier> det = fd.getDeterminant().getColumnIdentifiers();
+                                ColumnIdentifier dep = fd.getDependant();
+                                for (ColumnIdentifier c : det){
+                                   c.setTableIdentifier(depTable);
+                                }
+                                dep.setTableIdentifier(depTable);
+                                ColumnCombination left = new ColumnCombination();
+                                left.setColumnIdentifiers(det);
+                                addFd.setDeterminant(left);
+                                addFd.setDependant(dep);
+                                addOn.add(addFd);
+                            }
+                        }
+                    }
 
+                }//end for loop
+            }//end inner for loop
+            fdList.addAll(addOn);
+        }//end for loop
+        // expand the INDs
+        ArrayList<InclusionDependency> addOn = new ArrayList<>();
+        for(InclusionDependency id: _ids)
+        {
+            List<ColumnIdentifier> depFields = id.getDependant().getColumnIdentifiers();
+            ColumnPermutation left = id.getDependant();
+            String refTable = id.getReferenced().getColumnIdentifiers().get(0).getTableIdentifier().replaceAll("^\"|\"$", "");
+            List<ColumnIdentifier> refFields = id.getReferenced().getColumnIdentifiers();
+            for(InclusionDependency tid: _ids) {
+                String tDepTable = id.getDependant().getColumnIdentifiers().get(0).getTableIdentifier().replaceAll("^\"|\"$", "");
+                if (tDepTable.equals(refTable)){
+                    List<ColumnIdentifier> tDepFields = tid.getDependant().getColumnIdentifiers();
+                    List<ColumnIdentifier> tRefFields = tid.getReferenced().getColumnIdentifiers();
+                    String tRefTable = tid.getReferenced().getColumnIdentifiers().get(0).getTableIdentifier().replaceAll("^\"|\"$", "");
+                    if ((tDepFields.containsAll(refFields) && refFields.containsAll(tDepFields))
+                            || (tRefFields.containsAll(refFields) && refFields.containsAll(tRefFields)))
+                    {
+                        ColumnPermutation right = tid.getReferenced();
+                        InclusionDependency addInd = new InclusionDependency(left, right);
+                        addOn.add(addInd);
+                    }
+                }
+            }
+        }//end for loop
+        _ids.addAll(addOn);
+        addOn.clear();
+
+        for(InclusionDependency id: _ids)
+        {
+            String depTable = id.getDependant().getColumnIdentifiers().get(0).getTableIdentifier().replaceAll("^\"|\"$", "");
+            String refTable = id.getReferenced().getColumnIdentifiers().get(0).getTableIdentifier().replaceAll("^\"|\"$", "");
+            List<ColumnIdentifier> depFields = id.getDependant().getColumnIdentifiers();
+            List<ColumnIdentifier> refFields = id.getReferenced().getColumnIdentifiers();
+            for(InclusionDependency tid: _ids) {
+                List<ColumnIdentifier> tDepFields = tid.getDependant().getColumnIdentifiers();
+                String tDepTable = tid.getDependant().getColumnIdentifiers().get(0).getTableIdentifier().replaceAll("^\"|\"$", "");
+                String tRefTable = tid.getReferenced().getColumnIdentifiers().get(0).getTableIdentifier().replaceAll("^\"|\"$", "");
+                if (tDepTable.equals(depTable) && tRefTable.equals(refTable)){
+                    ArrayList<FunctionalDependency> fds = _fds.get(tDepTable);
+                    for (FunctionalDependency fd: fds) {
+                        Set<ColumnIdentifier> fdDep = fd.getDeterminant().getColumnIdentifiers();
+                        ColumnIdentifier fdRef = fd.getDependant();
+                        if (fdDep.containsAll(depFields) && fdRef.toString().equals(tDepFields.toString()))
+                        {
+                            List left1 = id.getDependant().getColumnIdentifiers();
+                            List left2 = id.getDependant().getColumnIdentifiers();
+                            left1.addAll(left2);
+                            List right1 = id.getReferenced().getColumnIdentifiers();
+                            List right2 = id.getReferenced().getColumnIdentifiers();
+                            right1.addAll(right2);
+                            ColumnPermutation left = new ColumnPermutation();
+                            ColumnPermutation right = new ColumnPermutation();
+                            left.setColumnIdentifiers(left1);
+                            right.setColumnIdentifiers(right1);
+                            InclusionDependency addInd = new InclusionDependency(left, right);
+                            addOn.add(addInd);
+                        }
+                    }
+                }
+            }
+        }//end for loop
+        _ids.addAll(addOn);
     }//end infer
 
     public void fold()
